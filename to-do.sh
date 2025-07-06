@@ -38,14 +38,15 @@ check_dialog() {
 # Display main menu
 show_main_menu() {
     dialog --clear --title "Professional To-Do List Manager" \
-        --menu "Choose an option:" $DIALOG_HEIGHT $DIALOG_WIDTH 10 \
+        --menu "Choose an option:" $DIALOG_HEIGHT $DIALOG_WIDTH 11 \
         1 "View All Tasks" \
         2 "Add New Task" \
         3 "Edit Tasks" \
         4 "Delete Tasks" \
-        5 "Mark Tasks as Done" \
-        6 "Delete All Tasks" \
-        7 "Exit" 2>"$TEMP_FILE"
+        5 "Toggle Status" \
+	6 "Task Statistics" \
+        7 "Delete All Tasks" \
+        8 "Exit" 2>"$TEMP_FILE"
     
     return $?
 }
@@ -200,19 +201,22 @@ delete_tasks() {
 }
 
 # Mark tasks as done
-mark_tasks_done() {
-    if ! create_task_checklist "Mark as Done"; then
+toggle_task_status() {
+    if ! create_task_checklist "Toggle Status"; then
         return
     fi
     
     local selected_tasks=$(cat "$TEMP_FILE")
     if [ -z "$selected_tasks" ]; then
-        dialog --title "Information" --msgbox "No tasks selected to mark as done." 8 40
+        dialog --title "Information" --msgbox "No tasks selected to toggle status." 8 40
         return
     fi
     
     # Remove quotes and process each selected task
     selected_tasks=$(echo "$selected_tasks" | tr -d '"')
+    
+    local marked_done=0
+    local marked_undone=0
     
     for task_num in $selected_tasks; do
         # Get current task content
@@ -220,16 +224,60 @@ mark_tasks_done() {
         
         # Check if task is already marked as done
         if echo "$current_task" | grep -q "^\[DONE\]"; then
-            continue
+            # Remove [DONE] prefix
+            local undone_task=$(echo "$current_task" | sed 's/^\[DONE\] //')
+            undone_task=$(echo "$undone_task" | sed 's/[[\.*^$()+?{|]/\\&/g')
+            sed -i "${task_num}s/.*/$undone_task/" "$TODO_FILE"
+            marked_undone=$((marked_undone + 1))
+        else
+            # Add [DONE] prefix
+            local done_task="[DONE] $current_task"
+            done_task=$(echo "$done_task" | sed 's/[[\.*^$()+?{|]/\\&/g')
+            sed -i "${task_num}s/.*/$done_task/" "$TODO_FILE"
+            marked_done=$((marked_done + 1))
         fi
-        
-        # Mark task as done
-        local done_task="[DONE] $current_task"
-        done_task=$(echo "$done_task" | sed 's/[[\.*^$()+?{|]/\\&/g')
-        sed -i "${task_num}s/.*/$done_task/" "$TODO_FILE"
     done
     
-    dialog --title "Success" --msgbox "Selected tasks marked as done!" 8 40
+    # Show informative message about what was changed
+    local message=""
+    if [ $marked_done -gt 0 ] && [ $marked_undone -gt 0 ]; then
+        message="Tasks updated!\n\nMarked as done: $marked_done\nMarked as undone: $marked_undone"
+    elif [ $marked_done -gt 0 ]; then
+        message="$marked_done task(s) marked as done!"
+    elif [ $marked_undone -gt 0 ]; then
+        message="$marked_undone task(s) marked as undone!"
+    fi
+    
+    dialog --title "Success" --msgbox "$message" 10 40
+}
+
+# Count done and pending tasks
+# Count done and pending tasks
+show_task_stats() {
+    local task_count=$(count_tasks)
+    
+    # Ensure task_count is numeric
+    task_count=${task_count:-0}
+    if ! [[ "$task_count" =~ ^[0-9]+$ ]]; then
+        task_count=0
+    fi
+
+    if [ "$task_count" -eq 0 ]; then
+        dialog --title "Task Statistics" --msgbox "No tasks found.\n\nYour to-do list is empty." 10 50
+        return
+    fi
+
+    local done_count=$(grep -c "^\[DONE\]" "$TODO_FILE" 2>/dev/null || echo "0")
+    # Ensure done_count is numeric
+    done_count=${done_count:-0}
+    if ! [[ "$done_count" =~ ^[0-9]+$ ]]; then
+        done_count=0
+    fi
+    
+    local pending_count=$((task_count - done_count))
+
+    dialog --title "Task Statistics" \
+        --msgbox "Task Summary:\n\nDone: $done_count\nPending: $pending_count\nTotal: $task_count" 12 40
 }
 
 # Delete all tasks
@@ -285,12 +333,15 @@ main() {
                 delete_tasks
                 ;;
             5)
-                mark_tasks_done
+                toggle_task_status
                 ;;
             6)
+		show_task_stats
+		;;
+            7)
                 delete_all_tasks
                 ;;
-            7)
+            8)
                 dialog --title "Goodbye" --msgbox "Thank you for using To-Do List Manager!" 8 40
                 break
                 ;;
