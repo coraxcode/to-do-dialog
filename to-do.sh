@@ -3,7 +3,6 @@
 # Professional To-Do List Manager
 # Author: Shell Script Expert
 # Version: 2.0
-# Compatible with all Linux distributions
 
 # Configuration
 TODO_FILE="todo.txt"
