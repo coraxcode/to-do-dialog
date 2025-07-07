@@ -5,7 +5,7 @@
 # Version: 2.0
 
 # Configuration
-TODO_FILE="todo.txt"
+TODO_FILE="$HOME/Documents/todo.txt"
 TEMP_FILE="/tmp/todo_temp.$$"
 DIALOG_HEIGHT=20
 DIALOG_WIDTH=70
